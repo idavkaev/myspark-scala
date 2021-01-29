@@ -1,23 +1,27 @@
-import Utils.Utils
+package org.davkaev
+
+import com.typesafe.config.ConfigFactory
+import org.davkaev.Utils.Constants
+import org.davkaev.Utils.Helper
 import org.apache.spark.sql.functions.{col, datediff, sum}
+import org.apache.spark.sql.types.{LongType, StringType}
 import org.apache.spark.sql.{DataFrame, SparkSession, functions}
 
+
 object SparkBatchTask {
+
+  val sparkSession = Helper.getSparkSession
+  val config = ConfigFactory.load("application.conf").getConfig("basics")
+
   def main(args: Array[String]): Unit = {
 
-    System.setProperty("hadoop.home.dir", "C:\\Users\\Iliia_Davkaev\\Downloads\\hadoop_bin\\hadoop-3.2.1")
-    val KAFKA_SERVERS = "localhost:9092"
-    val HDFS_DATA_EXPEDIA = "hdfs://127.0.0.1:8020/data/expedia/*.avro"
-
-    val sparkSession = Utils.getSparkSession
-
-    val hotels = getDataFromKafka(sparkSession, KAFKA_SERVERS, "hotels-weather_3")
+    val hotels = getDataFromKafka(sparkSession, config.getString("kafka.servers"), Constants.KAFKA_TOPIC_HOTELS_WEATHER)
       .selectExpr("CAST(value AS STRING) as hotel")
-      .select(functions.from_json(functions.col("hotel"), Utils.getHotelsSchema).as("hotel_json"))
+      .select(functions.from_json(functions.col("hotel"), Helper.getHotelsSchema).as("hotel_json"))
       .select("hotel_json.*")
       .distinct()
 
-    val expedias = getDataFromHDSF(HDFS_DATA_EXPEDIA, sparkSession, "com.databricks.spark.avro")
+    val expedias = getDataFromHDSF(config.getString("hdfs.url"), sparkSession, "avro")
 
     // Calculate total living days (how many days all guests spent in hotel).
     val hotelsTotalDays = getTotalDaysSpentInHotel(expedias)
@@ -41,11 +45,11 @@ object SparkBatchTask {
 
     expedia.select("id", "hotel_id", "srch_ci", "srch_co")
       .withColumn("days_spent", datediff(col("srch_co"), col("srch_ci")))
-      .select("hotel_id", "days_spent")
+      .select(col("hotel_id").cast(StringType), col("days_spent").cast(LongType))
       .groupBy("hotel_id").agg(sum("days_spent") as "days_spent")
   }
 
-  def getDataFromKafka(session: SparkSession, kafkaServers: String, topic: String): DataFrame = {
+  private def getDataFromKafka(session: SparkSession, kafkaServers: String, topic: String): DataFrame = {
     session
       .read
       .format("kafka")
@@ -55,7 +59,7 @@ object SparkBatchTask {
       .load()
   }
 
-  def getDataFromHDSF(hdfsLocation: String, sparkSession: SparkSession, format: String): DataFrame = {
+  private def getDataFromHDSF(hdfsLocation: String, sparkSession: SparkSession, format: String): DataFrame = {
     sparkSession
       .read
       .format(format)
