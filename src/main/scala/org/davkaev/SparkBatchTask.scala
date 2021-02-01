@@ -34,7 +34,6 @@ object SparkBatchTask {
       .join(unpopularHotels, hotelsTotalDays.col("hotel_id") === unpopularHotels.col("hotel_id"), "left_anti")
       .select("hotel_id", "days_spent")
       .join(hotels, hotelsTotalDays("hotel_id") === hotels("id"), "left")
-
   }
 
   def getInvalidExpediaData(hotelsData: DataFrame, days: Int): DataFrame = {

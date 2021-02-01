@@ -21,7 +21,7 @@ object Writer {
       writeStream
       .outputMode("overwrite")
       .format("avro")
-      .option("path", "hdfs://localhost:8020/tmp/result/")
+      .option("path", config.getString("hdfs.dest.url"))
       .option("checkpointLocation", "/tmp")
       .start
       .processAllAvailable()
